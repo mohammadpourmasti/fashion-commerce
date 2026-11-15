@@ -15,3 +15,8 @@ export const catalogModule = {
   owns: ["product", "variant", "category", "collection", "attribute", "mediaAsset"],
   dependsOn: [],
 } as const satisfies ModuleDescriptor;
+
+// Contracts other modules and the composition root (2E) need. Application services follow in
+// later steps of phase 2C; the domain rules stay internal and are used through them.
+export { catalogAuthorization, CATALOG_PERMISSIONS } from "./domain/permissions";
+export { CATALOG_EVENT_TYPES } from "./domain/events";

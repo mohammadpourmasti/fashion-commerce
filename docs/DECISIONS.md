@@ -397,3 +397,43 @@ the Drizzle mirror documents them and an integration test checks that they are p
 
 **Consequences:** Adding a locale needs no migration. Persian-script slugs are percent-encoded in
 URLs, and browsers display them readably. A new image view needs a migration that widens the CHECK.
+
+## ADR-026 — Catalog domain rules (Phase 2C)
+
+**Status:** Accepted · 2026-11-15
+
+**Context:** ADR-024 and ADR-025 leave rules that need application context to the domain layer.
+Step 2 implements them as pure functions in `src/modules/catalog/domain`, with no database access.
+
+**Decision:**
+
+- *Validation style.* Domain functions never throw for bad input; they return
+  `Validation<T>` (`{ ok: true, value }` or `{ ok: false, issues }`) listing every issue with a
+  stable code and a path, so a form can show all problems at once.
+- *Slugs* (`slugify`): NFKD with Latin accents removed, then NFC; Arabic yeh/alef maksura/kaf/heh-yeh/teh
+  marbuta mapped to Persian ی/ک/ه, hamza and wasla letters folded to their base letter, Arabic
+  diacritics and tatweel removed, Persian and Arabic-Indic digits converted to ASCII, ZWNJ, other
+  zero-width and bidi control characters, spaces and punctuation turned into single hyphens, cut at a word boundary at 160 characters. Display
+  text keeps ZWNJ and the digits the author typed.
+- *One colour axis per product.* A product may have at most one axis whose attribute has
+  `axis_kind = 'color'`. Enforced in the domain (`planAxes`), not in the database: images already
+  link to a specific colour attribute and value, so a second colour axis would not corrupt data.
+- *Lifecycle:* draft → active (publish), active → draft (unpublish), draft or active → archived
+  (archive), archived → draft (restore). Publishing requires a Persian translation, an active
+  primary category, an active brand when one is set, all declared axes, at least one active variant
+  and at least one image.
+- *Categories:* at most four levels; a move takes the whole subtree, may not create a cycle and may
+  not push any descendant below level four; parents must be active.
+- *Variants:* at most 100 per product, counting discontinued ones (variants are never deleted);
+  matrix generation refuses a matrix larger than that. SKUs are trimmed, upper-cased and Persian
+  digits converted; barcodes lose spaces and hyphens before the GTIN check.
+- *Descriptive values:* each attribute at most once per product; select attributes may hold several
+  values (no single-select flag yet); numbers must fit `numeric(14, 4)` exactly and are never
+  rounded; archived attributes and values cannot be newly assigned, but a product may keep an
+  archived value it already has.
+- *Parity.* Patterns in the domain mirror the 0003 CHECK constraints; an integration test runs both
+  on the same inputs and fails on any disagreement.
+
+**Consequences:** Application services (Steps 3–7) only orchestrate: load state, call these
+functions, write in one transaction with outbox events. A future single-select attribute needs a
+schema flag and a domain rule.

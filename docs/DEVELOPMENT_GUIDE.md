@@ -164,6 +164,7 @@ by our own runner, not by `drizzle-kit` (which only drafts SQL).
 - The app role cannot delete products, variants, attributes, attribute values, categories, brands or media assets — archive or discontinue them.
 - Constraint errors: a bad reference is `23503`; deleting or re-keying a row that is still referenced through a RESTRICT foreign key is `23001`.
 - A module's integration tests that exercise its own down migration pin `migrateUp` with `to: <its migration number>`, so a later module's migration is never the one reverted.
+- Catalog domain rules (`src/modules/catalog/domain`) return `Validation` results instead of throwing. When a CHECK constraint in a catalog migration changes, update the matching domain pattern; `catalog-domain.int.test.ts` fails if they disagree.
 
 ## Environment variables
 
