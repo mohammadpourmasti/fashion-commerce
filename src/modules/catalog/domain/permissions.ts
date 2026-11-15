@@ -6,7 +6,7 @@ import type { AuthorizationCatalog, Permission } from "@/shared/kernel/authoriza
  * Public storefront reads of active products need no permission.
  */
 export const CATALOG_PERMISSIONS = {
-  /** Read every product including drafts and archived ones (admin). */
+  /** Admin reads: every product including drafts and archived ones, and the full taxonomy. */
   productsRead: "catalog:products.read",
   /** Create and edit products, translations, descriptive values, axes and variants. */
   productsManage: "catalog:products.manage",
@@ -20,7 +20,7 @@ export const CATALOG_PERMISSIONS = {
 
 export const catalogAuthorization: AuthorizationCatalog = {
   permissions: [
-    { key: CATALOG_PERMISSIONS.productsRead, description: "View all products, including drafts and archived products" },
+    { key: CATALOG_PERMISSIONS.productsRead, description: "View all catalog data, including drafts, archived products and the full taxonomy" },
     { key: CATALOG_PERMISSIONS.productsManage, description: "Create and edit products, variants and their content" },
     { key: CATALOG_PERMISSIONS.productsPublish, description: "Publish, unpublish, archive and restore products" },
     { key: CATALOG_PERMISSIONS.taxonomyManage, description: "Manage categories, brands and attributes" },

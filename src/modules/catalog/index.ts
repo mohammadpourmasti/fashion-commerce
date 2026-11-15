@@ -16,7 +16,13 @@ export const catalogModule = {
   dependsOn: [],
 } as const satisfies ModuleDescriptor;
 
-// Contracts other modules and the composition root (2E) need. Application services follow in
-// later steps of phase 2C; the domain rules stay internal and are used through them.
+// Contracts other modules and the composition root (2E) need, and the catalog's services.
+// The domain rules stay internal and are used through the services.
 export { catalogAuthorization, CATALOG_PERMISSIONS } from "./domain/permissions";
 export { CATALOG_EVENT_TYPES } from "./domain/events";
+export type { CatalogIssue, CatalogIssueCode } from "./domain/errors";
+export { createCatalog, type Catalog, type CatalogOptions } from "./application/catalog";
+export type { CatalogResult } from "./application/support";
+export type { CategoryView } from "./application/categories";
+export type { BrandView } from "./application/brands";
+export type { AttributeView, AttributeValueView } from "./application/attributes";

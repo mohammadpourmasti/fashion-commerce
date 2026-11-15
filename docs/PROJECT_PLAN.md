@@ -17,7 +17,7 @@ introduces.
 | 1 | Quality gates: Vitest, Playwright, CI workflow, Dockerfile + docker-compose (Postgres) | **Done — local verification complete on Windows** (see "Phase 1 — verification"); still pending: the first real GitHub Actions run; remaining item: two localized-404 e2e tests are `fixme` |
 | 2A | Data foundation: DB pool, transaction helper, migration runner (checksums, safe down), transactional outbox + `handled_events`, real-PostgreSQL tests | **Done — local verification complete on Windows** (see "Phase 2A"); still pending: the first real GitHub Actions run |
 | 2B | Identity: users, scrypt passwords, sessions (`__Host-session`), login throttling, CSRF, kernel authorization contracts | **Done — local verification complete on Windows** (see "Phase 2B"); still pending: the first real GitHub Actions run |
-| 2C | Catalog: products, variants (composite FKs), categories, brands, attributes, localized content, image metadata (no prices) | **In progress — Steps 1 (schema, committed) and 2 (domain, awaiting review)** (see "Phase 2C") |
+| 2C | Catalog: products, variants (composite FKs), categories, brands, attributes, localized content, image metadata (no prices) | **In progress — Steps 1–2 committed; Step 3 (taxonomy services) awaiting review** (see "Phase 2C") |
 | 2D | Inventory: locations, ledger, reservations, DB-function-only writes, delta-matrix tests | Planned |
 | 2E | Integration: composition root wiring, end-to-end flows, hardening | Planned |
 | 6 | Storefront: category/product pages, search, cart | Planned |
@@ -103,8 +103,8 @@ Approved scope: service layer only (ADR-024, ADR-025). No prices, stock, HTTP ro
 | Step | Scope | Status |
 | --- | --- | --- |
 | 1 | ADR-024/025, migration `drizzle/0003_catalog`, `src/modules/catalog/infrastructure/schema.ts`, schema and constraint integration tests | **Done** (commit `93a31d9`) |
-| 2 | Domain: slugs, SKU/GTIN, variant matrix, category tree, publication rules, permission catalog, unit tests | **Implemented; awaiting review** |
-| 3 | Taxonomy services: categories, brands, attributes and values | Planned |
+| 2 | Domain: slugs, SKU/GTIN, variant matrix, category tree, publication rules, permission catalog, unit tests | **Done** (commit `ee7a335`) |
+| 3 | Taxonomy services: categories, brands, attributes and values | **Implemented; awaiting review** |
 | 4 | Products, translations, descriptive attributes | Planned |
 | 5 | Axes and variants | Planned |
 | 6 | Images | Planned |
@@ -122,6 +122,13 @@ Step 2 (ADR-026; no migration, no database change):
 - `src/modules/catalog/domain/`: pure rules returning `Validation` results with every issue — text and slug normalization, keys, SKU, GTIN barcodes, swatches, translations (Persian required to publish), category tree (no cycles, depth ≤ 4), attribute definitions and typed descriptive values, product axes (≤ 3, at most one colour axis, frozen once variants exist), variant plans (one offered value per axis, unique combinations, ≤ 100 per product), image metadata and image sets (colour links only to the colour axis), lifecycle transitions and publish readiness, the permission catalog and ID-only event contracts.
 - `@/modules/catalog` now exports `catalogAuthorization`, `CATALOG_PERMISSIONS` and `CATALOG_EVENT_TYPES`.
 - Tests: unit tests per domain file, and `catalog-domain.int.test.ts`, which checks that the domain validators accept exactly what the 0003 constraints accept (slugs, keys, SKUs, GTINs, every attribute-definition combination, decimals, swatches, asset metadata, translation limits).
+
+Step 3 (ADR-027; no migration, no database change):
+
+- `src/modules/catalog/application/`: `createCatalog({ pool, now })` with category services (create, update, move, reorder, archive, restore, tree), brand services (create, update, archive, restore, list) and attribute services (create, update, archive, restore, list; values: create, update, reorder, archive, restore).
+- Every write: `ctx.authorize("catalog:taxonomy.manage")`, domain validation, one transaction with the change and an ID-only outbox event; expected failures return a `Validation` with issues. Admin reads need `catalog:products.read`.
+- Tests: `catalog-taxonomy.int.test.ts` (authorization refusals for every write, reads, all service rules, concurrent creates and tree changes, rollback of a failing operation, events) and unit tests for the shared helpers.
+- Known limitations: concurrent edits of the same taxonomy item are last-write-wins (no version check yet); taxonomy changes are not audited (outbox events are notifications, not history); the real authorizer is wired in 2E.
 
 ## Explicit non-goals (for now)
 

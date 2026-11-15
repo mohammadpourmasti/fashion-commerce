@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { validateEvent } from "@/shared/events/outbox";
 import { mergeCatalogs } from "@/shared/kernel/authorization";
 
-import { CATALOG_EVENT_TYPES, productEvent, variantEvent } from "./events";
+import { attributeChanged, brandChanged, CATALOG_EVENT_TYPES, categoryChanged, productEvent, variantEvent } from "./events";
 import { catalogAuthorization, CATALOG_PERMISSIONS } from "./permissions";
 
 describe("catalog permission catalog", () => {
@@ -47,5 +47,15 @@ describe("catalog events", () => {
         expect(value).toMatch(/^[0-9a-f-]{36}$/);
       }
     }
+  });
+
+  it("taxonomy events are valid, ID-only and keyed by their own aggregate", () => {
+    const id = "0193b7a0-0000-7000-8000-000000000003";
+    const valueId = "0193b7a0-0000-7000-8000-000000000004";
+    expect(categoryChanged(id)).toEqual({ type: "catalog.category.changed", aggregate: { type: "category", id }, payload: { categoryId: id } });
+    expect(brandChanged(id)).toEqual({ type: "catalog.brand.changed", aggregate: { type: "brand", id }, payload: { brandId: id } });
+    expect(attributeChanged(id)).toEqual({ type: "catalog.attribute.changed", aggregate: { type: "attribute", id }, payload: { attributeId: id } });
+    expect(attributeChanged(id, valueId).payload).toEqual({ attributeId: id, valueId });
+    for (const event of [categoryChanged(id), brandChanged(id), attributeChanged(id, valueId)]) expect(() => validateEvent(event)).not.toThrow();
   });
 });

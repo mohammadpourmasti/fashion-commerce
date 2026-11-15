@@ -437,3 +437,51 @@ Step 2 implements them as pure functions in `src/modules/catalog/domain`, with n
 **Consequences:** Application services (Steps 3–7) only orchestrate: load state, call these
 functions, write in one transaction with outbox events. A future single-select attribute needs a
 schema flag and a domain rule.
+
+## ADR-027 — Catalog taxonomy services (Phase 2C)
+
+**Status:** Accepted · 2026-11-15
+
+**Decision:**
+
+- *Service shape.* `createCatalog({ pool, now })` returns category, brand and attribute services.
+  Each write calls `ctx.authorize("catalog:taxonomy.manage")` first (an `AuthorizationError` is
+  thrown, as in identity), validates with the domain functions, then runs one transaction that
+  writes the change and its outbox event. Expected failures return `Validation` issues
+  (`not_found`, `key_taken`, `slug_taken`, `invalid_order`, domain codes). Admin reads (tree,
+  lists, archived rows included) need `catalog:products.read`.
+- *Immutable identity.* Category, brand, attribute and value keys never change, and neither does
+  an attribute's usage, value type or axis kind. Changing a size axis into a colour axis could give
+  existing products two colour axes, and the database already forbids most such changes once the
+  attribute is used. Mutable: translations, positions, a value's swatch, and a number attribute's
+  unit — but only while no product stores a value for that attribute (`attribute_in_use`), because
+  stored numbers would silently change meaning.
+- *Translations* are replaced as a whole set on update; Persian is required from creation.
+- *Category tree.* Every structural change takes one advisory lock and re-reads the tree, so
+  concurrent moves and creates cannot exceed the depth limit or form a cycle. New and moved
+  categories are appended to their siblings; `reorder` takes the complete sibling list.
+  Archiving needs the children archived first; restoring needs the parent active. Archive and
+  restore are idempotent (a repeat writes nothing and emits no event).
+- *Uniqueness* is checked inside the transaction for precise issue paths; a concurrent writer that
+  still trips a unique constraint gets `key_taken` / `slug_taken` instead of an exception.
+- *Events.* `catalog.category.changed`, `catalog.brand.changed` and `catalog.attribute.changed`
+  (value changes carry `valueId`), ID-only, written in the same transaction as the change. One
+  event per changed category or brand (a sibling reorder emits one per category whose position
+  changed); attribute and value writes emit one per call (`reorderValues` emits a single event for
+  the attribute). No-ops (repeat archive/restore, a move to the current parent, an unchanged
+  order) emit nothing.
+- *Outbox is not an audit log.* Outbox events notify consumers that an aggregate changed; they
+  carry no actor, no before/after values and no reason, and dispatched rows may be pruned. They
+  must not be used as change history. Identity's audit log belongs to identity (ADR-015), so
+  taxonomy changes are currently not audited anywhere; a catalog audit trail is a separate, later
+  decision. The system is single-tenant; the security boundary is the permission check plus the
+  least-privilege application role.
+- *Concurrent edits: last write wins (known limitation).* Updates lock the row they change, so
+  they never interleave, but there is no optimistic version check: if two editors load the same
+  category, brand, attribute or value and both save, the second save silently replaces the
+  first's translations, unit or swatch. Structural tree changes are unaffected (serialized by the
+  tree lock and re-validated). A version column and conflict check are deferred; no schema change
+  in this step.
+- *Wiring.* Services are built with `createCatalog({ pool, now })` and receive a `RequestContext`;
+  the real authorizer (identity), the process-wide instance and catalog-permission sync are wired
+  by the composition root in 2E.

@@ -13,6 +13,11 @@ export const CATALOG_EVENT_TYPES = {
   productRestored: "catalog.product.restored",
   variantCreated: "catalog.variant.created",
   variantDiscontinued: "catalog.variant.discontinued",
+  // Taxonomy: one "changed" event per aggregate (created, edited, moved, reordered, archived,
+  // restored). Consumers such as caches or a search index re-read the current state.
+  categoryChanged: "catalog.category.changed",
+  brandChanged: "catalog.brand.changed",
+  attributeChanged: "catalog.attribute.changed",
 } as const;
 
 export type ProductEventType = (typeof CATALOG_EVENT_TYPES)[
@@ -30,4 +35,23 @@ export const variantEvent = (type: VariantEventType, productId: string, variantI
   type,
   aggregate: { type: "product", id: productId },
   payload: { productId, variantId },
+});
+
+export const categoryChanged = (categoryId: string): DomainEventInput => ({
+  type: CATALOG_EVENT_TYPES.categoryChanged,
+  aggregate: { type: "category", id: categoryId },
+  payload: { categoryId },
+});
+
+export const brandChanged = (brandId: string): DomainEventInput => ({
+  type: CATALOG_EVENT_TYPES.brandChanged,
+  aggregate: { type: "brand", id: brandId },
+  payload: { brandId },
+});
+
+/** Attribute values belong to their attribute's aggregate; `valueId` is set for value changes. */
+export const attributeChanged = (attributeId: string, valueId?: string): DomainEventInput => ({
+  type: CATALOG_EVENT_TYPES.attributeChanged,
+  aggregate: { type: "attribute", id: attributeId },
+  payload: valueId ? { attributeId, valueId } : { attributeId },
 });

@@ -4,6 +4,11 @@
  */
 
 export type CatalogIssueCode =
+  // lookups and uniqueness (application layer)
+  | "not_found"
+  | "key_taken"
+  | "slug_taken"
+  | "invalid_order"
   // text, slugs and keys
   | "invalid_locale"
   | "invalid_name"
@@ -22,10 +27,12 @@ export type CatalogIssueCode =
   | "category_archived"
   | "category_cycle"
   | "category_too_deep"
+  | "category_has_active_children"
   // attributes
   | "invalid_attribute_definition"
   | "attribute_not_found"
   | "attribute_archived"
+  | "attribute_in_use"
   | "attribute_not_descriptive"
   | "attribute_type_mismatch"
   | "value_not_found"
