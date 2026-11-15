@@ -1,0 +1,19 @@
+# Keep the build context small and free of local state or secrets.
+.git
+.github
+.next
+node_modules
+coverage
+test-results
+playwright-report
+blob-report
+e2e
+docs
+*.md
+.env*
+!.env.example
+Dockerfile
+.dockerignore
+docker-compose.yml
+npm-debug.log*
+*.tsbuildinfo

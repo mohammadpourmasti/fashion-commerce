@@ -7,3 +7,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Project rules
+
+- Read `docs/ARCHITECTURE.md` and `docs/DEVELOPMENT_GUIDE.md` before changing code.
+- Business logic belongs in `src/modules/<name>`; import modules only via `@/modules/<name>`.
+- No hard-coded UI strings: add to both dictionaries in `src/shared/i18n/dictionaries`.
+- Use logical CSS utilities (`ms-`, `pe-`, `start-`) so RTL works; no `ml-`/`pr-`/`left-`.
+- Money is integer minor units (`@/shared/money/money`); never floats.
+- Run `npm run check` before declaring work done. Never claim tests passed unless run.

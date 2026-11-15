@@ -1,0 +1,36 @@
+# Local development services. NOT for production.
+#
+#   docker compose up -d        start PostgreSQL in the background
+#   docker compose ps           wait for "healthy"
+#   docker compose down         stop (data is kept in the named volume)
+#   docker compose down -v      stop and DELETE all local data
+#
+# The credentials below are throwaway development defaults and the port is
+# bound to localhost only. Override via a git-ignored `.env` next to this file
+# (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_PORT). Never reuse
+# these values anywhere else.
+name: fashion-commerce
+
+services:
+  postgres:
+    # Pinned: bump deliberately (and read the release notes), not by accident.
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fashion}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fashion_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-fashion_commerce}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18+ images keep a versioned data directory under this path.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres-data:
