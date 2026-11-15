@@ -157,6 +157,14 @@ by our own runner, not by `drizzle-kit` (which only drafts SQL).
 - Other modules declare permissions in their own catalog and check them with `ctx.authorize("module:action", scope)`; they never import `@/modules/identity`.
 - Run `syncCatalog()` at deploy time after adding permissions or roles.
 
+## Catalog schema
+
+- Write a product and its primary `product_categories` row in the same transaction: the membership foreign key and the axis-position trigger are checked at commit.
+- A product's `axis_count` and axes are frozen once it has variants; add values to the existing axes instead.
+- The app role cannot delete products, variants, attributes, attribute values, categories, brands or media assets — archive or discontinue them.
+- Constraint errors: a bad reference is `23503`; deleting or re-keying a row that is still referenced through a RESTRICT foreign key is `23001`.
+- A module's integration tests that exercise its own down migration pin `migrateUp` with `to: <its migration number>`, so a later module's migration is never the one reverted.
+
 ## Environment variables
 
 See `.env.example`. All variables are validated in `src/config/env.ts`; the

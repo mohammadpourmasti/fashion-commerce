@@ -19,6 +19,7 @@ const SITE = "https://shop.example.com";
 const FAST_SCRYPT = { N: 2 ** 10, r: 8, p: 1, keyLength: 32, saltLength: 16 } as const;
 const PASSWORD = "correct horse battery staple";
 const COOKIE = "__Host-session";
+const IDENTITY_MIGRATION = 2;
 
 let db: TestDatabase;
 let appPool: Pool;
@@ -28,7 +29,8 @@ let identity: Identity;
 beforeEach(async () => {
   clock = new Date("2030-01-01T00:00:00Z");
   db = await createTestDatabase();
-  await migrateUp(db.pool, { directory: REAL_MIGRATIONS, appRole: db.appRole });
+  // Stop at 0002 so the down-migration tests below revert identity, not a later module's migration.
+  await migrateUp(db.pool, { directory: REAL_MIGRATIONS, appRole: db.appRole, to: IDENTITY_MIGRATION });
   // Everything the application does in these tests runs as the least-privilege role.
   appPool = createPool(db.url, { max: 8, options: `-c role=${db.appRole}` });
   identity = createIdentity({ pool: appPool, authSecret: SECRET, siteUrl: SITE, scrypt: FAST_SCRYPT, now: () => clock });
@@ -102,12 +104,12 @@ describe("migration 0002_identity", () => {
   it("round-trips down and up to an identical schema when the tables are empty", async () => {
     const empty = await createTestDatabase();
     try {
-      await migrateUp(empty.pool, { directory: REAL_MIGRATIONS, appRole: empty.appRole });
+      await migrateUp(empty.pool, { directory: REAL_MIGRATIONS, appRole: empty.appRole, to: IDENTITY_MIGRATION });
       const before = await schemaSnapshot(empty.pool);
       await migrateDown(empty.pool, { directory: REAL_MIGRATIONS, steps: 1, production: false });
       const gone = await empty.pool.query("SELECT to_regclass('public.users') AS t");
       expect(gone.rows[0].t).toBeNull();
-      await migrateUp(empty.pool, { directory: REAL_MIGRATIONS, appRole: empty.appRole });
+      await migrateUp(empty.pool, { directory: REAL_MIGRATIONS, appRole: empty.appRole, to: IDENTITY_MIGRATION });
       expect(await schemaSnapshot(empty.pool)).toBe(before);
     } finally {
       await empty.cleanup();

@@ -136,6 +136,10 @@ modules/<name>/
 
 Business modules depend only on the kernel contracts in `src/shared/kernel/authorization.ts`. A `RequestContext` carries the actor and `authorize()`; identity implements the `Authorizer` port and the composition root passes it in. See ADR-016, ADR-022 and ADR-023.
 
+## Catalog data
+
+Catalog tables (ADR-018, ADR-024, ADR-025) hold structure only — no prices or stock. Variants use at most three positional axes; composite foreign keys ensure a variant uses only values its product offers, one per axis, in a unique combination, and freeze a product's axes once variants exist. Products, variants and other master rows are archived or discontinued, never deleted. Localized content lives in per-locale translation tables; images are metadata with a view (`front`, `back`, `detail`, `gallery`) and an optional link to one of the product's colour-axis values (never a size or other axis).
+
 ## Security baseline
 
 - Secrets only via validated server env; `NEXT_PUBLIC_*` never holds secrets.

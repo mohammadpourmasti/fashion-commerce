@@ -17,7 +17,7 @@ introduces.
 | 1 | Quality gates: Vitest, Playwright, CI workflow, Dockerfile + docker-compose (Postgres) | **Done — local verification complete on Windows** (see "Phase 1 — verification"); still pending: the first real GitHub Actions run; remaining item: two localized-404 e2e tests are `fixme` |
 | 2A | Data foundation: DB pool, transaction helper, migration runner (checksums, safe down), transactional outbox + `handled_events`, real-PostgreSQL tests | **Done — local verification complete on Windows** (see "Phase 2A"); still pending: the first real GitHub Actions run |
 | 2B | Identity: users, scrypt passwords, sessions (`__Host-session`), login throttling, CSRF, kernel authorization contracts | **Done — local verification complete on Windows** (see "Phase 2B"); still pending: the first real GitHub Actions run |
-| 2C | Catalog: products, variants (composite FKs), categories, brands, attributes, localized content, image metadata (no prices) | Planned |
+| 2C | Catalog: products, variants (composite FKs), categories, brands, attributes, localized content, image metadata (no prices) | **In progress — Step 1 (schema) implemented; awaiting review** (see "Phase 2C") |
 | 2D | Inventory: locations, ledger, reservations, DB-function-only writes, delta-matrix tests | Planned |
 | 2E | Integration: composition root wiring, end-to-end flows, hardening | Planned |
 | 6 | Storefront: category/product pages, search, cart | Planned |
@@ -95,6 +95,27 @@ Scope: service layer only (ADR-022, ADR-023). No HTTP routes, no UI, no SMS OTP,
 - Known limits: distributed attackers can keep one account at the 15-minute delay (no hard lockout by design); scrypt uses the libuv thread pool (throttling bounds it); no audit retention or archival yet; no route handlers yet.
 - Verified on Windows on 2026-11-15 against the Compose PostgreSQL 18.6: `npm run check` (lint, typecheck, 205 unit tests in 16 files, `db:check` with 2 migrations, production build) and `npm run test:db` (95 integration tests in 5 files) all passed; no throwaway `fc_test_` databases or `fc_` roles remained afterwards.
 - Not run in GitHub Actions yet. No migration has been run against the development database.
+
+## Phase 2C — catalog
+
+Approved scope: service layer only (ADR-024, ADR-025). No prices, stock, HTTP routes, UI, seed data or collections. Delivered in steps, each reviewed before the next.
+
+| Step | Scope | Status |
+| --- | --- | --- |
+| 1 | ADR-024/025, migration `drizzle/0003_catalog`, `src/modules/catalog/infrastructure/schema.ts`, schema and constraint integration tests | **Implemented; awaiting review** |
+| 2 | Domain: slugs, SKU/GTIN, variant matrix, category tree, publication rules, permission catalog, unit tests | Planned |
+| 3 | Taxonomy services: categories, brands, attributes and values | Planned |
+| 4 | Products, translations, descriptive attributes | Planned |
+| 5 | Axes and variants | Planned |
+| 6 | Images | Planned |
+| 7 | Public read queries, outbox events, docs, Windows verification script | Planned |
+
+Step 1:
+
+- Migration `0003_catalog`: 19 tables, the GTIN check function, a deferred trigger for axis positions, least-privilege grants (no `DELETE` on master rows) and a guarded `down.sql`.
+- Integration tests (`src/modules/catalog/catalog-schema.int.test.ts`): Drizzle parity (columns, generated columns, CHECK, UNIQUE, foreign keys, indexes), an up/down round trip back to the exact previous schema, FCD01 refusal with data, no seed rows, app-role privileges, and the key constraints (primary category membership, axis and value ownership, variant combinations, frozen axes, SKU/GTIN, typed descriptive values, image views and colour links, slugs).
+- `identity.int.test.ts` now migrates only up to `0002_identity`, so its down-migration tests keep reverting identity rather than the newest migration.
+- No migration has been run against the development database.
 
 ## Explicit non-goals (for now)
 

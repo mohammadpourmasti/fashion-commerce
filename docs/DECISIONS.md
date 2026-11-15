@@ -318,3 +318,82 @@ and `audit_events.actor_id` are plain values for the same reason.
 - **Throttling.** Per account + address: 5 failures per 15 minutes; per account: 100 attempts per hour. Failures are reserved before the password is checked, so parallel guesses cannot all slip through. Over the limit the wait doubles from 30 seconds up to 15 minutes; refused attempts are not counted; a correct password resets the account + address counter. There is no hard lockout. Keys are HMACs of the email and address; unknown addresses share one bucket. Login always answers `invalid_credentials` for any failure and does equivalent work for unknown accounts.
 - **Audit.** `audit_events` is append-only for the application role (SELECT and INSERT only). It stores HMACs of addresses, never passwords, tokens, hashes or raw attempted emails; metadata is capped at 4 KB. Authorization denials are logged best-effort (a failing audit write never changes the decision).
 - **CSRF.** Stateless check for non-safe methods: `Sec-Fetch-Site` must be `same-origin` when present, otherwise `Origin`, then `Referer`, must equal the site origin; no evidence means refusal. This phase ships the check (`checkCsrf`) and the service layer only; HTTP routes and UI come later and must call it.
+
+## ADR-024 — Catalog data model and variant architecture (Phase 2C)
+
+**Status:** Accepted · 2026-11-15
+
+**Context:** Women's, children's, accessories and underwear ranges, 500 to 3,000 products at
+launch, sold online and in boutiques. Variants combine axes such as size and colour, and inventory
+(2D) will reference variants, so variant identity and integrity must hold at database level.
+
+**Decision:** Catalog owns 19 tables in migration `0003_catalog`, unprefixed like identity's:
+`categories`, `brands`, `attributes`, `attribute_values`, `products`, `product_categories`,
+`product_attribute_values`, `product_axes`, `product_axis_values`, `variants`, `media_assets`,
+`product_images`, plus seven translation tables (ADR-025). No prices, no stock, no seed rows.
+
+- *Categories* form a tree (`parent_id`); the top level holds the departments (women, kids,
+  accessories, underwear) as data, not as an enum. Depth and cycle checks belong to the application.
+- *Attributes* have a `usage` (`variant_axis` or `descriptive`) and a `value_type` (`select`, `text`,
+  `number`, `boolean`; axes are always `select`). Axis attributes also have an `axis_kind`
+  (`color`, `size`, `other`), which descriptive attributes never have. Each sizing system (women,
+  kids, bra, shoes) is its own attribute. Values exist only for `select` attributes.
+- *Descriptive values* are typed: one row per selected value (several allowed), or one row per
+  product and attribute for `number` and `boolean`; `text` values are localized (ADR-025). A
+  composite foreign key ties each row to an attribute of the declared usage and type.
+- *Primary category.* `products (id, primary_category_id)` references `product_categories`
+  (deferred), so the primary category is always one of the product's categories.
+- *Variants* have at most three positional axes. `products.axis_count` (0 to 3) is mirrored on each
+  variant and referenced by a composite foreign key, and `value1..value3` reference
+  `product_axis_values (product_id, position, value_id)` through constant generated position
+  columns. Hence a variant uses only values its product offers, in the right position, one per
+  axis (CHECK), and each combination once (`UNIQUE NULLS NOT DISTINCT`); a product without axes has
+  exactly one variant. A deferred constraint trigger checks that a product's axes are exactly
+  positions `1..axis_count`.
+- *Frozen axis structure.* Once a variant exists, `axis_count` cannot change and axes cannot be
+  removed or re-pointed (RESTRICT foreign keys). New values can still be added to existing axes, and
+  values that no variant or image uses can be withdrawn.
+- *SKU and barcode.* SKU is required, uppercase, `^[A-Z0-9][A-Z0-9-]{2,39}$`, unique. Barcode is
+  optional, unique, and must be a valid GTIN-8/12/13/14 (`catalog_gtin_is_valid`).
+- *No physical deletion of master rows.* The application role has no `DELETE` on products, variants,
+  attributes, attribute values, categories, brands or media assets: products go
+  draft → active → archived, variants active → discontinued, the rest are archived.
+- *Concurrency.* `products.version` supports optimistic locking in the application layer.
+- Rules that need application context stay in the application (Step 2 onward): publishing requires
+  a Persian translation, at least one active variant and at least one image; category depth and
+  cycles; the 100-variant cap; slug normalization. Returnability and similar rules for underwear or
+  children's wear belong to commerce. Collections are deferred. `schema-refs.ts` and its lint rule
+  arrive with the first consumer (2D). Catalog exports its permission catalog and the composition
+  root merges it (2E). Domain events go through the outbox with ID-only payloads.
+
+**Consequences:** Variant integrity does not depend on application code. A fourth axis, or a change
+of axes on a product that already has variants, needs a new product (or a deliberate migration).
+Some declarations (deferrable constraints, the trigger, the GTIN function) exist only in SQL;
+the Drizzle mirror documents them and an integration test checks that they are present.
+
+## ADR-025 — Localized content and image metadata (Phase 2C)
+
+**Status:** Accepted · 2026-11-15
+
+**Decision:**
+
+- *Translations* live in dedicated tables keyed by `(owner, locale)` — categories, brands,
+  attributes, attribute values, products, text attribute values and image alt text — not in JSONB.
+  `locale` is a two-letter code validated against the configured locales by the application;
+  Persian (`fa`) is required to publish, English (`en`) is optional.
+- *Slugs* are per locale and unique per `(locale, slug)` for categories, brands and products. They
+  are normalized Persian script, not transliteration: lowercase Latin letters, ASCII digits and
+  Persian letters, with Arabic yeh/kaf mapped to Persian ی/ک, no ZWNJ or spaces, and words joined by
+  single hyphens (at most 160 characters). The database rejects anything else; the application
+  produces the normalized form.
+- *Images.* `media_assets` holds metadata only (storage key, content type JPEG/PNG/WebP/AVIF, size,
+  dimensions, SHA-256); storage and upload come later. `product_images` places an asset on a
+  product with a `view` (`front`, `back`, `detail`, `gallery`) for the future digital clothing rack,
+  a position (unique per product, deferred so images can be reordered), and an optional colour
+  link: `(color_value_id, color_attribute_id)` must be a value this product offers, and the attribute
+  must have `axis_kind = 'color'`. Size values and values of any other axis are rejected, and a
+  colour attribute referenced by images cannot change its kind.
+  3D assets and virtual try-on are out of scope.
+
+**Consequences:** Adding a locale needs no migration. Persian-script slugs are percent-encoded in
+URLs, and browsers display them readably. A new image view needs a migration that widens the CHECK.
