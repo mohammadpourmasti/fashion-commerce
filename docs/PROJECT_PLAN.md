@@ -15,8 +15,8 @@ introduces.
 | --- | --- | --- |
 | 0 | Foundation: Next.js app, i18n/RTL, env validation, design tokens, module boundaries, docs | **Done** |
 | 1 | Quality gates: Vitest, Playwright, CI workflow, Dockerfile + docker-compose (Postgres) | **Done — local verification complete on Windows** (see "Phase 1 — verification"); still pending: the first real GitHub Actions run; remaining item: two localized-404 e2e tests are `fixme` |
-| 2A | Data foundation: DB pool, transaction helper, migration runner (checksums, safe down), transactional outbox + `handled_events`, real-PostgreSQL tests | **Implemented; awaiting Windows verification** (see "Phase 2A") |
-| 2B | Identity: users, scrypt passwords, sessions (`__Host-session`), login throttling, CSRF, kernel authorization contracts | Planned — needs approval |
+| 2A | Data foundation: DB pool, transaction helper, migration runner (checksums, safe down), transactional outbox + `handled_events`, real-PostgreSQL tests | **Done — local verification complete on Windows** (see "Phase 2A"); still pending: the first real GitHub Actions run |
+| 2B | Identity: users, scrypt passwords, sessions (`__Host-session`), login throttling, CSRF, kernel authorization contracts | **Done — local verification complete on Windows** (see "Phase 2B"); still pending: the first real GitHub Actions run |
 | 2C | Catalog: products, variants (composite FKs), categories, brands, attributes, localized content, image metadata (no prices) | Planned |
 | 2D | Inventory: locations, ledger, reservations, DB-function-only writes, delta-matrix tests | Planned |
 | 2E | Integration: composition root wiring, end-to-end flows, hardening | Planned |
@@ -72,15 +72,29 @@ Remaining item:
 
 ## Phase 2A — data foundation
 
-Scope: infrastructure only. No Identity, Catalog or Inventory tables exist yet (ADR-013 to ADR-021).
+Scope: infrastructure only. Phase 2A added no Identity, Catalog or Inventory tables (ADR-013 to ADR-021).
 
 - Dependencies (exact): `drizzle-orm` 0.45.4, `pg` 8.23.1; dev: `@types/pg` 8.23.1, `drizzle-kit` 0.31.11, `tsx` 4.23.15.
 - `src/shared/db`: pool, `runInTransaction` (retries 40001/40P01), migration runner (SHA-256 checksums, advisory lock, drift detection, up/down policy lint, safe down with `fc_assert_*` guards, production down blocked by default).
 - `src/shared/events`: transactional outbox, dispatcher (`SKIP LOCKED`, per-event savepoint, backoff, dead letter), `handled_events` de-duplication.
 - Migration `drizzle/0001_foundation`: guard and grant helper functions, `outbox_events`, `handled_events`.
 - Tests: `npm test` (unit) and `npm run test:db` (real PostgreSQL; throwaway databases, never the dev database). CI has a `database` job on `postgres:18.6-alpine`.
-- Verified in a Linux cloud copy against PostgreSQL 18.6 (lint, typecheck, unit, integration, `db:check`). **Not yet run on Windows**; the production build was not run there either (Google Fonts unreachable).
+- Verified in a Linux cloud copy against PostgreSQL 18.6 (lint, typecheck, unit, integration, `db:check`), then on Windows on 2026-11-14 (`npm ci`, lint, typecheck, unit tests, `db:check`, `npm run test:db` against the Compose PostgreSQL, production build): all passed, and the throwaway test databases were removed.
 - No migration has been run against the development database.
+
+## Phase 2B — identity & access
+
+Scope: service layer only (ADR-022, ADR-023). No HTTP routes, no UI, no SMS OTP, no OAuth.
+
+- Kernel: `src/shared/kernel/authorization.ts` (Actor, Permission, Scope, Authorizer, RequestContext with `can`/`authorize`, catalog merge).
+- Migration `drizzle/0002_identity`: nine tables, least-privilege grants (audit log append-only for the app role), guarded `down.sql`.
+- `src/modules/identity`: domain (scrypt, keys, cookie, CSRF, throttle policy, grants), application services (login, sessions, throttle, audit, users, authorizer, catalog sync, request context) and `createIdentity()`.
+- CLI: `npm run identity:create-admin`. Startup check for an insecure site URL in production.
+- Tests: unit tests for the domain and kernel; integration tests on a throwaway PostgreSQL (schema drift, down guard, audit immutability, login, throttling, sessions, rotation races, RBAC, last-owner protection).
+- Runner tests now copy only `0001_foundation` into their fixtures so later module migrations do not affect them.
+- Known limits: distributed attackers can keep one account at the 15-minute delay (no hard lockout by design); scrypt uses the libuv thread pool (throttling bounds it); no audit retention or archival yet; no route handlers yet.
+- Verified on Windows on 2026-11-15 against the Compose PostgreSQL 18.6: `npm run check` (lint, typecheck, 205 unit tests in 16 files, `db:check` with 2 migrations, production build) and `npm run test:db` (95 integration tests in 5 files) all passed; no throwaway `fc_test_` databases or `fc_` roles remained afterwards.
+- Not run in GitHub Actions yet. No migration has been run against the development database.
 
 ## Explicit non-goals (for now)
 

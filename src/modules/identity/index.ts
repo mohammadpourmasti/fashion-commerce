@@ -15,3 +15,11 @@ export const identityModule = {
   owns: ["user", "session", "role", "permission"],
   dependsOn: [],
 } as const satisfies ModuleDescriptor;
+
+export { createIdentity, getIdentity, type Identity, type IdentityOptions } from "./application/identity";
+export { identityCatalog, IDENTITY_PERMISSIONS, OWNER_ROLE } from "./domain/catalog";
+export { checkCsrf } from "./domain/csrf";
+export { assertSecureSiteUrl, InsecureSiteUrlError } from "./domain/cookie";
+export { normalizeEmail } from "./domain/email";
+export type { LoginResult } from "./application/login";
+export type { IdentityError } from "./application/users";

@@ -31,8 +31,8 @@ Browser ──► proxy.ts (locale negotiation)
 | UI | React 19.3, Tailwind CSS 4.3 |
 | Language | TypeScript 5.9, strict |
 | Validation | Zod 4 |
-| Database | PostgreSQL + Drizzle ORM *(phase 2)* |
-| Auth | Session-based auth + RBAC in `identity` *(phase 3)* |
+| Database | PostgreSQL + Drizzle ORM |
+| Auth | Session-based auth + RBAC in `identity` *(phase 2B: service layer; HTTP routes and UI later)* |
 | Media | S3-compatible object storage *(phase 4)* |
 | Testing | Vitest (unit) + Playwright (e2e) |
 | Deploy | Docker image (Next.js standalone output), Node runtime |
@@ -132,12 +132,16 @@ modules/<name>/
   exchange-rate artifact. FX rates may assist price-list generation.
 - Database columns: `bigint` minor units + `char(3)` currency.
 
+## Identity and authorization
+
+Business modules depend only on the kernel contracts in `src/shared/kernel/authorization.ts`. A `RequestContext` carries the actor and `authorize()`; identity implements the `Authorizer` port and the composition root passes it in. See ADR-016, ADR-022 and ADR-023.
+
 ## Security baseline
 
 - Secrets only via validated server env; `NEXT_PUBLIC_*` never holds secrets.
 - RBAC enforced in module application services, not only in UI or proxy.
 - Server Actions and Route Handlers validate all input with Zod.
-- `poweredByHeader` disabled; CSP and security headers added with auth (phase 3).
+- `poweredByHeader` disabled; CSP and security headers are added with the first authenticated HTTP routes.
 - No payment card data touches our servers; hosted/redirect gateways only.
 
 ## Rendering

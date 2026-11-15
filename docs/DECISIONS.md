@@ -290,3 +290,31 @@ Delivery is at-least-once; event ordering is not guaranteed.
 **Decision:** Web and POS share one `orders` table in the commerce module with a
 `channel` column. Catalog holds no prices; amounts are integer minor units with an
 explicit currency code, and nothing depends on one currency or payment gateway.
+
+## ADR-022 — Identity data model and RBAC (Phase 2B)
+
+**Status:** Accepted · 2026-11-14
+
+**Decision:** Identity owns `users`, `credentials`, `sessions`, `roles`, `permissions`,
+`role_permissions`, `user_roles`, `audit_events` and `auth_throttle` (migration
+`0002_identity`). No other module has a foreign key to them (ADR-015); `user_roles.granted_by`
+and `audit_events.actor_id` are plain values for the same reason.
+
+- Authentication is email + password only (scrypt N=2^15, r=8, p=1 via `node:crypto`, NFKC-normalized, 12 to 128 characters). SMS OTP, OAuth and an admin UI are not part of this phase.
+- Authorization is role-based with `"<resource>:<action>"` permissions and an optional scope (`global`, or a `type` + `id` defined by the module that owns the scope). A global grant satisfies any scope; a scoped grant only the same scope. There are no wildcards or hierarchy. Deny by default.
+- Roles and permissions are defined in code (`identityCatalog`, merged with other modules' catalogs by `mergeCatalogs`) and synchronised idempotently by `syncAuthorizationCatalog`. They are not seeded by the migration, so its guarded `down.sql` stays usable on a fresh database; once the catalog is synchronised `down` is refused by design (non-empty tables).
+- The `owner` role holds every catalog permission, including ones added later (re-sync). The last active owner cannot be disabled or lose the role; changes that could remove an owner are serialised with an advisory lock.
+- Modules other than identity never import it. They receive a `RequestContext` and call `ctx.authorize(permission, scope)`; identity implements the `Authorizer` port and the composition root wires it. Grants are read from the database on every check, so role changes and disabling take effect on the next request.
+- There is no default account. The first owner is created with `npm run identity:create-admin`, which reads the password without echo (never from argv or environment) and refuses when an active owner exists.
+
+## ADR-023 — Sessions, throttling, audit and CSRF (Phase 2B)
+
+**Status:** Accepted · 2026-11-14
+
+**Decision:**
+
+- **Sessions.** Opaque 256-bit random token; only its HMAC-SHA256 (key derived with HKDF from `AUTH_SECRET`, a separate key per purpose) is stored. Absolute expiry 7 days, idle timeout 8 hours, rotation after 1 hour (new row, old revoked as `rotated`, absolute expiry kept; of two concurrent rotations exactly one wins). Logout, password change (other sessions) and disabling a user revoke sessions.
+- **Cookie.** `__Host-session` with `Secure; HttpOnly; SameSite=Lax; Path=/` and no Domain on HTTPS. On loopback HTTP only, a plain `session` cookie without `Secure`. Production refuses to boot with `http` on a non-loopback host (`assertSecureSiteUrl` in `instrumentation.ts`).
+- **Throttling.** Per account + address: 5 failures per 15 minutes; per account: 100 attempts per hour. Failures are reserved before the password is checked, so parallel guesses cannot all slip through. Over the limit the wait doubles from 30 seconds up to 15 minutes; refused attempts are not counted; a correct password resets the account + address counter. There is no hard lockout. Keys are HMACs of the email and address; unknown addresses share one bucket. Login always answers `invalid_credentials` for any failure and does equivalent work for unknown accounts.
+- **Audit.** `audit_events` is append-only for the application role (SELECT and INSERT only). It stores HMACs of addresses, never passwords, tokens, hashes or raw attempted emails; metadata is capped at 4 KB. Authorization denials are logged best-effort (a failing audit write never changes the decision).
+- **CSRF.** Stateless check for non-safe methods: `Sec-Fetch-Site` must be `same-origin` when present, otherwise `Origin`, then `Referer`, must equal the site origin; no evidence means refusal. This phase ships the check (`checkCsrf`) and the service layer only; HTTP routes and UI come later and must call it.

@@ -150,6 +150,13 @@ by our own runner, not by `drizzle-kit` (which only drafts SQL).
   CREATEDB and CREATEROLE), e.g. the local Compose server with database
   `postgres`. Each test file creates and drops its own throwaway database.
 
+## Identity & access
+
+- Create the first owner (after `npm run db:migrate`): `npm run identity:create-admin`. It prompts for the email and the password (hidden); it never takes a password from arguments or environment variables. It also synchronises the role and permission catalog.
+- `AUTH_SECRET` (at least 32 random characters) is required to build the identity service. Changing it invalidates every session.
+- Other modules declare permissions in their own catalog and check them with `ctx.authorize("module:action", scope)`; they never import `@/modules/identity`.
+- Run `syncCatalog()` at deploy time after adding permissions or roles.
+
 ## Environment variables
 
 See `.env.example`. All variables are validated in `src/config/env.ts`; the
@@ -218,8 +225,8 @@ docker compose down -v    # stop and delete all local data
 - The image tag is pinned (`postgres:18.6-alpine`, a published tag in Docker's
   official-images manifest). Bump it deliberately; PostgreSQL 18 images keep
   data under `/var/lib/postgresql`, which is where the volume is mounted.
-- The application does not use the database yet; phase 2A added the data
-  foundation (see "Database tooling").
+- The running application does not use the database yet: phase 2A added the data
+  foundation and phase 2B the identity service layer, but no route calls them (see "Database tooling").
 
 ## Production image
 

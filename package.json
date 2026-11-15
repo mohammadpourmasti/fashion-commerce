@@ -17,6 +17,7 @@
     "db:migrate": "tsx scripts/db-migrate.ts up",
     "db:status": "tsx scripts/db-migrate.ts status",
     "db:migrate:down": "tsx scripts/db-migrate.ts down",
+    "identity:create-admin": "tsx scripts/identity-create-admin.ts",
     "check": "npm run lint && npm run typecheck && npm run test && npm run db:check && npm run build"
   },
   "engines": {

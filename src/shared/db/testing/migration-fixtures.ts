@@ -8,12 +8,36 @@ import type { Pool } from "pg";
 export const REAL_MIGRATIONS = resolve(process.cwd(), "drizzle");
 
 const created: string[] = [];
+let exitHookInstalled = false;
 
-/** Copies the real migrations into a temp directory and adds extra ones (e.g. a 0002 under test). */
+function removeAll(): string[] {
+  const failures: string[] = [];
+  for (const dir of created.splice(0)) {
+    try {
+      rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch (error) {
+      failures.push(`${dir}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return failures;
+}
+
+/**
+ * Copies the foundation migration (0001) into a temp directory and adds extra ones (e.g. a
+ * 0002 under test). Runner tests exercise the runner, not the module migrations that come
+ * later, so they are deliberately insulated from them.
+ */
 export function migrationsWith(extra: Record<string, { up: string; down: string }> = {}): string {
+  if (!exitHookInstalled) {
+    exitHookInstalled = true;
+    // Last resort when a worker dies or an afterEach never ran: temp directories do not outlive the process.
+    process.once("exit", () => {
+      removeAll();
+    });
+  }
   const dir = mkdtempSync(join(tmpdir(), "fc-int-mig-"));
-  created.push(dir);
-  cpSync(REAL_MIGRATIONS, dir, { recursive: true, filter: (src) => !src.includes("_generated") });
+  created.push(dir); // registered before any copy so a half-written directory is still removed
+  cpSync(REAL_MIGRATIONS, dir, { recursive: true, filter: (src) => !src.includes("_generated") && !/[\\/]0(?!001_)\d{3}_[^\\/]*/.test(src) });
   for (const [name, { up, down }] of Object.entries(extra)) {
     mkdirSync(join(dir, name));
     writeFileSync(join(dir, name, "migration.sql"), up);
@@ -22,8 +46,10 @@ export function migrationsWith(extra: Record<string, { up: string; down: string 
   return dir;
 }
 
+/** Removes every temp directory created so far. Keeps going after a failure, then reports all of them. */
 export function removeFixtureDirectories(): void {
-  for (const dir of created.splice(0)) rmSync(dir, { recursive: true, force: true });
+  const failures = removeAll();
+  if (failures.length > 0) throw new Error(`Could not remove fixture directories: ${failures.join("; ")}`);
 }
 
 /** A stable, comparable description of the public schema (tables, columns, indexes, constraints, functions). */
