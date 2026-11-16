@@ -519,3 +519,19 @@ required at creation; publishing, variants, axes, images, listing and search sta
   `invalid_transition`. Nothing is deleted.
 - *Events.* `catalog.product.created` / `updated` / `archived` / `restored`, ID-only, in the same
   transaction as the change.
+
+## ADR-029 — Axes and variant services (Phase 2C, Step 5A)
+
+**Status:** Accepted · 2026-11-16 (Step 5A review: offered values are preserved when an axis keeps its attribute and position; no-op writes do not change the version or emit events; variant creation emits `catalog.variant.created` only.)
+
+**Decision:**
+
+- *Scope.* `catalog.variants` manages a product's axes, the values it offers on them, and its variants. Images are Step 5B; publishing, pricing and stock are out of scope.
+- *Permissions.* Every write needs `catalog:products.manage`; `list` needs `catalog:products.read`.
+- *Locking.* Every write locks the product row (`FOR UPDATE`) first, then takes `FOR SHARE` on the attributes and values it checks, as in ADR-028. Archived products are read-only (`product_archived`). Variant operations locate the variant without a lock, lock its product, and only then lock the variant row, so the lock order is always product, then variant.
+- *Versions.* `setAxes`, `offerValues` and `withdrawValues` require `expectedVersion` (`version_conflict` otherwise). Variant `create`, `updateBarcode` and `discontinue` do not: they are append-only or identity-keyed, so they lock the product and increment its version. A write that changes nothing is a no-op: it returns the current version, writes nothing and emits no event (see below). A real change increments the version exactly once.
+- *No-op writes.* `setAxes` with the stored list, `offerValues` whose values are all already offered (or empty), `withdrawValues` with an empty list, `updateBarcode` with the stored barcode (none for none, after normalization) and `create` with no variants change nothing. They still check the product (not found, `version_conflict`, `product_archived`) and validate their input, but never touch `products.version` or `updated_at` and add no outbox event.
+- *Axes.* `setAxes` replaces the ordered list. It is allowed while the product has no variants, or when the structure is unchanged (`axes_frozen` otherwise). Axes that keep their attribute and position keep their offered values; values of removed axes are dropped, subject to the foreign-key protections (variants, colour-linked images). Removing a colour axis that colour-linked images use is refused with `axis_in_use`.
+- *Values.* `offerValues` skips values already offered. `withdrawValues` refuses a value that any variant (discontinued included) or colour-linked image uses (`value_in_use`) and one that is not offered (`value_not_offered`).
+- *Variants.* `create` validates every row with the domain planner (one offered value per axis, unique combination, at most 100 per product counting discontinued ones) and reports SKU or barcode clashes with other products per row. A race on a global unique constraint is mapped to the same issue code. The SKU never changes after creation; `updateBarcode` sets or clears the barcode. `discontinue` is one-way and not idempotent: a repeat is `invalid_transition`.
+- *Events.* Variant creation emits `catalog.variant.created` per new variant and no `catalog.product.updated`; discontinuing emits `catalog.variant.discontinued`; real axis, value and barcode changes emit `catalog.product.updated`. All are ID-only and written in the same transaction.

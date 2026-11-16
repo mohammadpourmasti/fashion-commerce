@@ -43,6 +43,9 @@ const UNIQUE_CONSTRAINTS: Readonly<Record<string, CatalogIssue>> = {
   category_translations_slug_unique: issue("slug_taken", "translations"),
   brand_translations_slug_unique: issue("slug_taken", "translations"),
   product_translations_slug_unique: issue("slug_taken", "translations"),
+  variants_sku_unique: issue("duplicate_sku", "variants"),
+  variants_barcode_unique: issue("duplicate_barcode", "variants"),
+  variants_combination_unique: issue("duplicate_combination", "variants"),
 };
 
 /** The issue for a known unique violation, or null for anything else (which is rethrown). */

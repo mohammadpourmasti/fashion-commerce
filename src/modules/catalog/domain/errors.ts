@@ -50,6 +50,8 @@ export type CatalogIssueCode =
   | "duplicate_axis"
   | "multiple_color_axes"
   | "axes_frozen"
+  | "axis_in_use"
+  | "value_in_use"
   | "wrong_value_count"
   | "value_not_offered"
   | "duplicate_combination"

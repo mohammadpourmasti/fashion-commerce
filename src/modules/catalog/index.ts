@@ -27,5 +27,6 @@ export type { CategoryView } from "./application/categories";
 export type { BrandView } from "./application/brands";
 export type { AttributeView, AttributeValueView } from "./application/attributes";
 export type { ProductView, ProductContentInput, ProductUpdateInput } from "./application/products";
+export type { AxisView, VariantView, ProductVariantsView } from "./application/variants";
 export type { DescriptiveInput, DescriptiveValue } from "./domain/attributes";
 export type { TranslationInput } from "./domain/localization";

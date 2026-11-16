@@ -105,9 +105,9 @@ Approved scope: service layer only (ADR-024, ADR-025). No prices, stock, HTTP ro
 | 1 | ADR-024/025, migration `drizzle/0003_catalog`, `src/modules/catalog/infrastructure/schema.ts`, schema and constraint integration tests | **Done** (commit `93a31d9`) |
 | 2 | Domain: slugs, SKU/GTIN, variant matrix, category tree, publication rules, permission catalog, unit tests | **Done** (commit `ee7a335`) |
 | 3 | Taxonomy services: categories, brands, attributes and values | **Done** (commit `936aba7`) |
-| 4 | Products, translations, descriptive attributes | **Implemented; awaiting review** |
-| 5 | Axes and variants | Planned |
-| 6 | Images | Planned |
+| 4 | Products, translations, descriptive attributes | **Done** (commit `142032f`) |
+| 5A | Axes and variants | **Implemented; awaiting review** |
+| 5B | Media assets and product images | Planned |
 | 7 | Public read queries, outbox events, docs, Windows verification script | Planned |
 
 Step 1:
@@ -136,6 +136,13 @@ Step 4 (ADR-028; no migration, no database change):
 - Events: `catalog.product.created`, `catalog.product.updated`, `catalog.product.archived`, `catalog.product.restored` (ID-only, same transaction).
 - Shared fix: `pgErrorCode` now looks through Drizzle's `DrizzleQueryError` to the PostgreSQL error (`cause`). Before, `runInTransaction` never retried serialization failures or deadlocks raised by Drizzle queries, and unique-violation mapping missed them.
 - Tests: `catalog-products.int.test.ts` (authorization, validation, slugs, optimistic locking incl. concurrent updates, section replacement, primary switch, archived references, rollback, archive/restore, concurrent creates), domain and helper unit tests.
+
+Step 5A (ADR-029; no migration, no database change; step 6 "Images" is now 5B):
+
+- `catalog.variants`: `setAxes`, `offerValues`, `withdrawValues` (these take `expectedVersion`), `create` (variants), `updateBarcode`, `discontinue` (these lock the product and increment its version without `expectedVersion`) and `list`. All writes need `catalog:products.manage`; `list` needs `catalog:products.read`. Domain rules are reused from `domain/axes.ts`, `domain/variants.ts` and `domain/codes.ts`.
+- New issue codes: `axis_in_use`, `value_in_use`. Unique-violation mapping now covers `variants_sku_unique`, `variants_barcode_unique` and `variants_combination_unique`.
+- Events: `catalog.variant.created` / `catalog.variant.discontinued`; axis, value and barcode changes emit `catalog.product.updated`.
+- Tests: `catalog-variants.int.test.ts` (authorization, axes, offered values, variants, barcode, discontinuation, and deterministic concurrency tests that order competing calls with a lock held on the product row).
 
 ## Explicit non-goals (for now)
 
