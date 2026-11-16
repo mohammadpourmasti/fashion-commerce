@@ -2,7 +2,7 @@ import { and, eq, notInArray, sql, type SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import type { Pool } from "pg";
 
-import { isUniqueViolation } from "@/shared/db/errors";
+import { isUniqueViolation, pgErrorConstraint } from "@/shared/db/errors";
 import type { Tx } from "@/shared/db/transaction";
 
 import { invalid, issue, type CatalogIssue, type Validation } from "../domain/errors";
@@ -42,13 +42,14 @@ const UNIQUE_CONSTRAINTS: Readonly<Record<string, CatalogIssue>> = {
   attribute_values_key_unique: issue("key_taken", "key"),
   category_translations_slug_unique: issue("slug_taken", "translations"),
   brand_translations_slug_unique: issue("slug_taken", "translations"),
+  product_translations_slug_unique: issue("slug_taken", "translations"),
 };
 
 /** The issue for a known unique violation, or null for anything else (which is rethrown). */
 export function uniqueViolationIssue(error: unknown): CatalogIssue | null {
   if (!isUniqueViolation(error)) return null;
-  const constraint = (error as { constraint?: unknown }).constraint;
-  return typeof constraint === "string" ? (UNIQUE_CONSTRAINTS[constraint] ?? null) : null;
+  const constraint = pgErrorConstraint(error);
+  return constraint ? (UNIQUE_CONSTRAINTS[constraint] ?? null) : null;
 }
 
 /** Runs a transactional write and turns a lost uniqueness race into an issue instead of an exception. */

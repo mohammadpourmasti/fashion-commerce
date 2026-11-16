@@ -12,6 +12,11 @@ describe("uniqueViolationIssue", () => {
     expect(uniqueViolationIssue(pgError("23505", "brand_translations_slug_unique"))).toEqual({ code: "slug_taken", path: "translations" });
   });
 
+  it("finds the database error behind Drizzle's query wrapper", () => {
+    const wrapped = Object.assign(new Error("Failed query: insert ..."), { cause: pgError("23505", "product_translations_slug_unique") });
+    expect(uniqueViolationIssue(wrapped)).toEqual({ code: "slug_taken", path: "translations" });
+  });
+
   it("ignores other errors and unknown constraints", () => {
     expect(uniqueViolationIssue(pgError("23505", "users_email_normalized_unique"))).toBeNull();
     expect(uniqueViolationIssue(pgError("23503", "categories_key_unique"))).toBeNull();

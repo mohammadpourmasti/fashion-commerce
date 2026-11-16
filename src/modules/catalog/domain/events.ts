@@ -6,6 +6,7 @@ import type { DomainEventInput } from "@/shared/events/outbox";
  * application layer adds them with `tx.events.add(...)` in the same transaction as the change.
  */
 export const CATALOG_EVENT_TYPES = {
+  productCreated: "catalog.product.created",
   productPublished: "catalog.product.published",
   productUpdated: "catalog.product.updated",
   productUnpublished: "catalog.product.unpublished",
@@ -21,7 +22,7 @@ export const CATALOG_EVENT_TYPES = {
 } as const;
 
 export type ProductEventType = (typeof CATALOG_EVENT_TYPES)[
-  "productPublished" | "productUpdated" | "productUnpublished" | "productArchived" | "productRestored"
+  "productCreated" | "productPublished" | "productUpdated" | "productUnpublished" | "productArchived" | "productRestored"
 ];
 export type VariantEventType = (typeof CATALOG_EVENT_TYPES)["variantCreated" | "variantDiscontinued"];
 

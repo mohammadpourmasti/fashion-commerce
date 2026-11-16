@@ -9,6 +9,9 @@ export type CatalogIssueCode =
   | "key_taken"
   | "slug_taken"
   | "invalid_order"
+  | "version_conflict"
+  | "product_archived"
+  | "brand_not_found"
   // text, slugs and keys
   | "invalid_locale"
   | "invalid_name"

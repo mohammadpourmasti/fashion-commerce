@@ -32,7 +32,7 @@ describe("catalog events", () => {
     const productId = "0193b7a0-0000-7000-8000-000000000001";
     const variantId = "0193b7a0-0000-7000-8000-000000000002";
     const events = [
-      ...(["productPublished", "productUpdated", "productUnpublished", "productArchived", "productRestored"] as const).map((k) =>
+      ...(["productCreated", "productPublished", "productUpdated", "productUnpublished", "productArchived", "productRestored"] as const).map((k) =>
         productEvent(CATALOG_EVENT_TYPES[k], productId),
       ),
       variantEvent(CATALOG_EVENT_TYPES.variantCreated, productId, variantId),

@@ -485,3 +485,37 @@ schema flag and a domain rule.
 - *Wiring.* Services are built with `createCatalog({ pool, now })` and receive a `RequestContext`;
   the real authorizer (identity), the process-wide instance and catalog-permission sync are wired
   by the composition root in 2E.
+
+## ADR-028 — Product core services (Phase 2C)
+
+**Status:** Accepted · 2026-11-16 (Step 4 review: shared PostgreSQL error unwrapping in
+`src/shared/db/errors.ts` kept; archive/restore not idempotent; no category-count limit; Persian
+required at creation; publishing, variants, axes, images, listing and search stay out of Step 4.)
+
+**Decision:**
+
+- *Scope.* `catalog.products` creates, edits, archives and restores products and reads one product
+  (admin). Variants, axes, images and publishing come in later steps; new products are drafts with
+  `axis_count = 0`.
+- *Permissions.* `create` / `update`: `catalog:products.manage`; `archive` / `restore`:
+  `catalog:products.publish`; `get`: `catalog:products.read`.
+- *Optimistic locking.* Unlike the taxonomy (ADR-027), product writes use `products.version`:
+  `update`, `archive` and `restore` take `expectedVersion`, a mismatch returns `version_conflict`
+  with the current version, and every successful write increments it. Two concurrent saves from the
+  same version: exactly one wins.
+- *Update semantics.* Each section (translations, brand, primary category, additional categories,
+  descriptive values) is optional; a section that is given replaces the stored one. Changing only
+  the primary keeps the other categories. Archived products are read-only (`product_archived`)
+  until restored.
+- *References.* Newly chosen categories, brands, attributes and values must be active; ones the
+  product already has may stay after being archived (an archived secondary category cannot become
+  primary). There is no fixed limit on categories per product; a primary category that is also a
+  member of the set is always required. Reads of referenced rows take `FOR SHARE` locks so
+  a concurrent archive waits for the product write.
+- *Translations.* Persian is required from creation (English optional), as for the taxonomy.
+- *Lifecycle.* `archive`: draft or active → archived; `restore`: archived → draft. A repeat is an
+  not idempotent (unlike the taxonomy). The version is checked first, so a stale
+  `expectedVersion` is always `version_conflict`; a repeat with the current version is
+  `invalid_transition`. Nothing is deleted.
+- *Events.* `catalog.product.created` / `updated` / `archived` / `restored`, ID-only, in the same
+  transaction as the change.

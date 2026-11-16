@@ -165,6 +165,8 @@ by our own runner, not by `drizzle-kit` (which only drafts SQL).
 - Constraint errors: a bad reference is `23503`; deleting or re-keying a row that is still referenced through a RESTRICT foreign key is `23001`.
 - A module's integration tests that exercise its own down migration pin `migrateUp` with `to: <its migration number>`, so a later module's migration is never the one reverted.
 - Catalog services (`createCatalog` from `@/modules/catalog`) take a `RequestContext`; they throw `AuthorizationError` when a permission is missing and return `Validation` issues for everything else. Writes need `catalog:taxonomy.manage`, admin reads `catalog:products.read`.
+- Product writes need the `version` the caller last read (`expectedVersion`); handle `version_conflict` by reloading.
+- Use `pgErrorCode` / `pgErrorConstraint` from `@/shared/db/errors` to inspect database errors: Drizzle wraps them in `DrizzleQueryError`, and these helpers follow the `cause`.
 - Catalog outbox events say *that* something changed (IDs only); they are not an audit trail. Taxonomy edits are last-write-wins for now (ADR-027): do not build UI that assumes conflict detection.
 - Catalog domain rules (`src/modules/catalog/domain`) return `Validation` results instead of throwing. When a CHECK constraint in a catalog migration changes, update the matching domain pattern; `catalog-domain.int.test.ts` fails if they disagree.
 

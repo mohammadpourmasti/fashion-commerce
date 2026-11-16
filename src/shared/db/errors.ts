@@ -18,12 +18,29 @@ export const PG_ERROR = {
   downMigrationRefused: "FCD01",
 } as const;
 
-export function pgErrorCode(error: unknown): string | undefined {
-  if (typeof error === "object" && error !== null && "code" in error) {
-    const code = (error as { code?: unknown }).code;
-    return typeof code === "string" ? code : undefined;
+/**
+ * The PostgreSQL error behind `error`. Drizzle wraps driver errors in a DrizzleQueryError
+ * ("Failed query: ...") whose `cause` is the original error, so the cause chain is followed
+ * (a few levels at most).
+ */
+function findPgError(error: unknown): { code: string; constraint?: unknown } | undefined {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && typeof current === "object" && current !== null; depth += 1) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string") return current as { code: string; constraint?: unknown };
+    current = (current as { cause?: unknown }).cause;
   }
   return undefined;
+}
+
+export function pgErrorCode(error: unknown): string | undefined {
+  return findPgError(error)?.code;
+}
+
+/** Name of the violated constraint, when PostgreSQL reported one. */
+export function pgErrorConstraint(error: unknown): string | undefined {
+  const constraint = findPgError(error)?.constraint;
+  return typeof constraint === "string" ? constraint : undefined;
 }
 
 export const isUniqueViolation = (error: unknown) => pgErrorCode(error) === PG_ERROR.uniqueViolation;

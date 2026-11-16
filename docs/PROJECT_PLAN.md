@@ -17,7 +17,7 @@ introduces.
 | 1 | Quality gates: Vitest, Playwright, CI workflow, Dockerfile + docker-compose (Postgres) | **Done — local verification complete on Windows** (see "Phase 1 — verification"); still pending: the first real GitHub Actions run; remaining item: two localized-404 e2e tests are `fixme` |
 | 2A | Data foundation: DB pool, transaction helper, migration runner (checksums, safe down), transactional outbox + `handled_events`, real-PostgreSQL tests | **Done — local verification complete on Windows** (see "Phase 2A"); still pending: the first real GitHub Actions run |
 | 2B | Identity: users, scrypt passwords, sessions (`__Host-session`), login throttling, CSRF, kernel authorization contracts | **Done — local verification complete on Windows** (see "Phase 2B"); still pending: the first real GitHub Actions run |
-| 2C | Catalog: products, variants (composite FKs), categories, brands, attributes, localized content, image metadata (no prices) | **In progress — Steps 1–2 committed; Step 3 (taxonomy services) awaiting review** (see "Phase 2C") |
+| 2C | Catalog: products, variants (composite FKs), categories, brands, attributes, localized content, image metadata (no prices) | **In progress — Steps 1–3 committed; Step 4 (product core) awaiting review** (see "Phase 2C") |
 | 2D | Inventory: locations, ledger, reservations, DB-function-only writes, delta-matrix tests | Planned |
 | 2E | Integration: composition root wiring, end-to-end flows, hardening | Planned |
 | 6 | Storefront: category/product pages, search, cart | Planned |
@@ -104,8 +104,8 @@ Approved scope: service layer only (ADR-024, ADR-025). No prices, stock, HTTP ro
 | --- | --- | --- |
 | 1 | ADR-024/025, migration `drizzle/0003_catalog`, `src/modules/catalog/infrastructure/schema.ts`, schema and constraint integration tests | **Done** (commit `93a31d9`) |
 | 2 | Domain: slugs, SKU/GTIN, variant matrix, category tree, publication rules, permission catalog, unit tests | **Done** (commit `ee7a335`) |
-| 3 | Taxonomy services: categories, brands, attributes and values | **Implemented; awaiting review** |
-| 4 | Products, translations, descriptive attributes | Planned |
+| 3 | Taxonomy services: categories, brands, attributes and values | **Done** (commit `936aba7`) |
+| 4 | Products, translations, descriptive attributes | **Implemented; awaiting review** |
 | 5 | Axes and variants | Planned |
 | 6 | Images | Planned |
 | 7 | Public read queries, outbox events, docs, Windows verification script | Planned |
@@ -129,6 +129,13 @@ Step 3 (ADR-027; no migration, no database change):
 - Every write: `ctx.authorize("catalog:taxonomy.manage")`, domain validation, one transaction with the change and an ID-only outbox event; expected failures return a `Validation` with issues. Admin reads need `catalog:products.read`.
 - Tests: `catalog-taxonomy.int.test.ts` (authorization refusals for every write, reads, all service rules, concurrent creates and tree changes, rollback of a failing operation, events) and unit tests for the shared helpers.
 - Known limitations: concurrent edits of the same taxonomy item are last-write-wins (no version check yet); taxonomy changes are not audited (outbox events are notifications, not history); the real authorizer is wired in 2E.
+
+Step 4 (ADR-028; no migration, no database change):
+
+- `catalog.products`: `create` (draft, Persian required), `update` (optimistic locking on `products.version`; translations, brand, primary and additional categories, descriptive values — each section optional and replacing), `archive` / `restore` (`catalog:products.publish`), `get` (admin view). Domain rules for category assignment and brand choice in `domain/products.ts`.
+- Events: `catalog.product.created`, `catalog.product.updated`, `catalog.product.archived`, `catalog.product.restored` (ID-only, same transaction).
+- Shared fix: `pgErrorCode` now looks through Drizzle's `DrizzleQueryError` to the PostgreSQL error (`cause`). Before, `runInTransaction` never retried serialization failures or deadlocks raised by Drizzle queries, and unique-violation mapping missed them.
+- Tests: `catalog-products.int.test.ts` (authorization, validation, slugs, optimistic locking incl. concurrent updates, section replacement, primary switch, archived references, rollback, archive/restore, concurrent creates), domain and helper unit tests.
 
 ## Explicit non-goals (for now)
 
