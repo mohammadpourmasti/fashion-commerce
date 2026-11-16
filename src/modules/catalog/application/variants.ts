@@ -12,6 +12,7 @@ import { CATALOG_PERMISSIONS } from "../domain/permissions";
 import { planVariants, type VariantInput } from "../domain/variants";
 import { attributes, attributeValues, productAxes, productAxisValues, productImages, products, variants } from "../infrastructure/schema";
 
+import { bumpVersion, loadAxes, openProduct } from "./product-lock";
 import { mapUniqueViolations, notFound, type CatalogDeps, type CatalogResult, type Db } from "./support";
 
 export interface AxisView {
@@ -38,53 +39,6 @@ export interface ProductVariantsView {
   readonly version: number;
   readonly axes: readonly AxisView[];
   readonly variants: readonly VariantView[];
-}
-
-interface LockedProduct {
-  readonly id: string;
-  readonly status: "draft" | "active" | "archived";
-  readonly version: number;
-  readonly axisCount: number;
-}
-
-const versionConflict = (current: number): CatalogResult<never> => invalid([issue("version_conflict", "expectedVersion", { current })]);
-
-/** Every Step 5A write starts here: the product row is the lock that serializes its structure. */
-async function lockProduct(db: Db, productId: string): Promise<LockedProduct | null> {
-  const [row] = await db
-    .select({ id: products.id, status: products.status, version: products.version, axisCount: products.axisCount })
-    .from(products)
-    .where(eq(products.id, productId))
-    .for("update")
-    .limit(1);
-  return row ?? null;
-}
-
-/** Locks the product and applies the shared preconditions; `expectedVersion` is checked when given. */
-async function openProduct(db: Db, productId: string, expectedVersion?: number): Promise<{ product: LockedProduct } | { failure: CatalogResult<never> }> {
-  const product = await lockProduct(db, productId);
-  if (!product) return { failure: notFound("productId") };
-  if (expectedVersion !== undefined && product.version !== expectedVersion) return { failure: versionConflict(product.version) };
-  if (product.status === "archived") return { failure: invalid([issue("product_archived", "productId")]) };
-  return { product };
-}
-
-async function bumpVersion(db: Db, product: LockedProduct, at: Date, extra: { axisCount?: number } = {}): Promise<number> {
-  const version = product.version + 1;
-  await db.update(products).set({ ...extra, version, updatedAt: at }).where(eq(products.id, product.id));
-  return version;
-}
-
-async function loadAxes(db: Db, productId: string): Promise<{ axes: ProductAxis[]; offered: Map<number, string[]> }> {
-  const axisRows = await db.select({ position: productAxes.position, attributeId: productAxes.attributeId }).from(productAxes).where(eq(productAxes.productId, productId)).orderBy(asc(productAxes.position));
-  const valueRows = await db
-    .select({ position: productAxisValues.position, valueId: productAxisValues.valueId })
-    .from(productAxisValues)
-    .where(eq(productAxisValues.productId, productId))
-    .orderBy(asc(productAxisValues.sortOrder), asc(productAxisValues.valueId));
-  const offered = new Map<number, string[]>(axisRows.map((a) => [a.position, []]));
-  for (const v of valueRows) offered.get(v.position)?.push(v.valueId);
-  return { axes: axisRows, offered };
 }
 
 async function variantCount(db: Db, productId: string): Promise<number> {

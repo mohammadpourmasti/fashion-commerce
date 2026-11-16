@@ -106,8 +106,8 @@ Approved scope: service layer only (ADR-024, ADR-025). No prices, stock, HTTP ro
 | 2 | Domain: slugs, SKU/GTIN, variant matrix, category tree, publication rules, permission catalog, unit tests | **Done** (commit `ee7a335`) |
 | 3 | Taxonomy services: categories, brands, attributes and values | **Done** (commit `936aba7`) |
 | 4 | Products, translations, descriptive attributes | **Done** (commit `142032f`) |
-| 5A | Axes and variants | **Implemented; awaiting review** |
-| 5B | Media assets and product images | Planned |
+| 5A | Axes and variants | **Done** (commit `3f85bce`) |
+| 5B | Media assets and product images | **Implemented; awaiting review** |
 | 7 | Public read queries, outbox events, docs, Windows verification script | Planned |
 
 Step 1:
@@ -143,6 +143,14 @@ Step 5A (ADR-029; no migration, no database change; step 6 "Images" is now 5B):
 - New issue codes: `axis_in_use`, `value_in_use`. Unique-violation mapping now covers `variants_sku_unique`, `variants_barcode_unique` and `variants_combination_unique`.
 - Events: `catalog.variant.created` / `catalog.variant.discontinued`; axis, value and barcode changes emit `catalog.product.updated`.
 - Tests: `catalog-variants.int.test.ts` (authorization, axes, offered values, variants, barcode, discontinuation, and deterministic concurrency tests that order competing calls with a lock held on the product row).
+
+Step 5B (ADR-030; no migration, no database change):
+
+- `catalog.media`: `registerAsset` (insert-only metadata, conflicts on storage key or hash are explicit issues), `setProductImages` (one full-set write with `expectedVersion`, diff by asset so image IDs are preserved, first image is primary, at most one front and one back per colour group, optional alt text, an active product keeps at least one image, no-op detection), `getAsset` and `listImages`. Permissions: `catalog:media.manage` for writes, `catalog:products.read` for reads.
+- New issue codes: `duplicate_view`, `asset_not_found`, `storage_key_taken`, `asset_hash_taken`. The product-lock helpers are now shared in `application/product-lock.ts`.
+- Event: `catalog.product.updated` for a real image change; asset registration emits none.
+- Tests: `catalog-media.int.test.ts` (authorization, asset conflicts and races, set/diff/no-op behaviour, reference protection both ways, deterministic races against axis and value changes, archive and concurrent sets, and a rollback test) plus new domain unit tests.
+- Left to the publishing step: publish-time validation and the last-active-variant guard.
 
 ## Explicit non-goals (for now)
 

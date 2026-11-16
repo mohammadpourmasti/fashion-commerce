@@ -535,3 +535,21 @@ required at creation; publishing, variants, axes, images, listing and search sta
 - *Values.* `offerValues` skips values already offered. `withdrawValues` refuses a value that any variant (discontinued included) or colour-linked image uses (`value_in_use`) and one that is not offered (`value_not_offered`).
 - *Variants.* `create` validates every row with the domain planner (one offered value per axis, unique combination, at most 100 per product counting discontinued ones) and reports SKU or barcode clashes with other products per row. A race on a global unique constraint is mapped to the same issue code. The SKU never changes after creation; `updateBarcode` sets or clears the barcode. `discontinue` is one-way and not idempotent: a repeat is `invalid_transition`.
 - *Events.* Variant creation emits `catalog.variant.created` per new variant and no `catalog.product.updated`; discontinuing emits `catalog.variant.discontinued`; real axis, value and barcode changes emit `catalog.product.updated`. All are ID-only and written in the same transaction.
+
+## ADR-030 — Media assets and product images (Phase 2C, Step 5B)
+
+**Status:** Accepted · 2026-11-16
+
+**Decision:**
+
+- *Scope.* `catalog.media` registers image asset metadata and arranges a product's images. Nothing is uploaded or stored: `storageKey` is an opaque key until the storage adapter exists (phase 4). No pricing, inventory, UI or routes.
+- *Permissions.* `registerAsset` and `setProductImages` need `catalog:media.manage`; `getAsset` and `listImages` need `catalog:products.read`.
+- *Assets are immutable.* `registerAsset` is insert-only; there is no update or unregister call, and the application role has no `DELETE` on `media_assets`. The storage key and the SHA-256 are each unique: a clash returns `storage_key_taken` or `asset_hash_taken` (the latter names the existing asset so the uploader can reuse it). A lost race on either constraint maps to the same issues. Registration emits no event.
+- *One full-set write.* `setProductImages` replaces the product's whole ordered image list and requires `expectedVersion`. The first image is the primary one (position 0). Existing images are matched by asset and keep their IDs: their view, colour link and position are updated in place (the position constraint is deferred), new assets are inserted, and images whose asset left the set are deleted with their alt text. The assets themselves stay.
+- *Validation.* Reused from the domain: `planImages` (views, one image per asset, colour links only to values the product offers on its colour axis) and `parseTranslations("image", …)` for alt text. New domain rule: a colour group (the images sharing one colour value, and the unlinked images as one group) has at most one `front` and one `back` image (`duplicate_view`); `detail` and `gallery` are unrestricted, and there is no limit on the number of images.
+- *Alt text* is optional per image and locale; Persian alt text is a publishing concern for a later step.
+- *Active products.* A product whose status is `active` (published) must keep at least one image: an empty set is refused with `no_image`. Drafts may have none. Archived products are read-only (`product_archived`). Publish-time validation and the last-active-variant guard belong to the publishing step.
+- *Locking.* As in ADR-029: the product row is locked `FOR UPDATE` first, then the referenced assets `FOR SHARE`; axes and offered values are read under that lock, so a concurrent `setAxes`, `offerValues` or `withdrawValues` is serialized with the image set. Reference protection runs both ways: images block `withdrawValues` (`value_in_use`) and `setAxes` (`axis_in_use`), and a withdrawn value cannot be linked.
+- *No-op writes.* A set identical to the stored one (assets, views, colour links, order and alt text) returns the current version, writes nothing and emits no event. A real change increments the version once and emits one `catalog.product.updated` (ID-only, same transaction).
+- *Shared plumbing.* The product lock, version bump and axis loader moved from the variant service to `application/product-lock.ts`, used by both services.
+- *No database change.* The 0003 schema, constraints and grants already cover everything above.

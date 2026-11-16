@@ -65,4 +65,29 @@ describe("planImages", () => {
       ),
     ).toEqual(["duplicate_asset"]);
   });
+
+  it("allows one front and one back per colour group, and the unlinked images form one group", () => {
+    const ok = planImages(colorAxis, [
+      { assetId: "a1", view: "front", colorValueId: "red" },
+      { assetId: "a2", view: "front", colorValueId: "black" },
+      { assetId: "a3", view: "back", colorValueId: "red" },
+      { assetId: "a4", view: "front" },
+      { assetId: "a5", view: "back" },
+    ]);
+    expect(ok.ok).toBe(true);
+
+    const bad = planImages(colorAxis, [
+      { assetId: "a1", view: "front", colorValueId: "red" },
+      { assetId: "a2", view: "front", colorValueId: "red" },
+      { assetId: "a3", view: "back" },
+      { assetId: "a4", view: "back" },
+    ]);
+    expect(codes(bad)).toEqual(["duplicate_view", "duplicate_view"]);
+    expect(bad.ok ? [] : bad.issues.map((i) => i.path)).toEqual(["images[1].view", "images[3].view"]);
+  });
+
+  it("does not restrict detail and gallery images", () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ assetId: `a${i}`, view: i % 2 ? "detail" : "gallery", colorValueId: "red" }));
+    expect(planImages(colorAxis, many).ok).toBe(true);
+  });
 });

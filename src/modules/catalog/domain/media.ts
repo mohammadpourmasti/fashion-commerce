@@ -76,13 +76,19 @@ export interface PlannedImage {
   readonly colorAttributeId: string | null;
 }
 
+/** Views of which a colour group may hold at most one image; detail and gallery are unrestricted. */
+const SINGLE_VIEWS: readonly string[] = ["front", "back"];
+
 /**
  * Validates a product's complete, ordered image list and assigns positions 0..n-1 (the first
  * image is the primary one). Each asset appears once; colour links must use the colour axis.
+ * Each colour group (the images sharing one colour value, and the unlinked images as one group)
+ * has at most one front and one back image.
  */
 export function planImages(colorAxis: ColorAxis | null, images: readonly ImageInput[]): Validation<PlannedImage[]> {
   const issues: CatalogIssue[] = [];
   const assets = new Set<string>();
+  const singles = new Set<string>();
   const planned: PlannedImage[] = [];
 
   images.forEach((image, position) => {
@@ -96,6 +102,11 @@ export function planImages(colorAxis: ColorAxis | null, images: readonly ImageIn
     if (colorValueId !== null) {
       if (!colorAxis) issues.push(issue("not_a_color_axis", `${path}.colorValueId`));
       else if (!colorAxis.offeredValueIds.has(colorValueId)) issues.push(issue("color_not_offered", `${path}.colorValueId`));
+    }
+    if (SINGLE_VIEWS.includes(image.view)) {
+      const group = `${colorValueId ?? ""}|${image.view}`;
+      if (singles.has(group)) issues.push(issue("duplicate_view", `${path}.view`, { view: image.view }));
+      singles.add(group);
     }
     if (issues.length > before) return;
     planned.push({

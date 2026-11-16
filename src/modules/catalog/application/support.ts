@@ -43,6 +43,8 @@ const UNIQUE_CONSTRAINTS: Readonly<Record<string, CatalogIssue>> = {
   category_translations_slug_unique: issue("slug_taken", "translations"),
   brand_translations_slug_unique: issue("slug_taken", "translations"),
   product_translations_slug_unique: issue("slug_taken", "translations"),
+  media_assets_storage_key_unique: issue("storage_key_taken", "storageKey"),
+  media_assets_sha256_unique: issue("asset_hash_taken", "sha256"),
   variants_sku_unique: issue("duplicate_sku", "variants"),
   variants_barcode_unique: issue("duplicate_barcode", "variants"),
   variants_combination_unique: issue("duplicate_combination", "variants"),
