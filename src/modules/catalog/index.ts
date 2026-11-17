@@ -29,5 +29,18 @@ export type { AttributeView, AttributeValueView } from "./application/attributes
 export type { ProductView, ProductContentInput, ProductUpdateInput } from "./application/products";
 export type { AxisView, VariantView, ProductVariantsView } from "./application/variants";
 export type { AssetView, AltText, ProductImageInput, ProductImageView, ProductImagesView, ProductImagesResult } from "./application/images";
+export type {
+  CategoryRef,
+  ProductCard,
+  ProductPage,
+  StorefrontAttribute,
+  StorefrontAxis,
+  StorefrontCategory,
+  StorefrontCategoryPage,
+  StorefrontImage,
+  StorefrontProduct,
+  StorefrontValue,
+  StorefrontVariant,
+} from "./application/storefront";
 export type { DescriptiveInput, DescriptiveValue } from "./domain/attributes";
 export type { TranslationInput } from "./domain/localization";

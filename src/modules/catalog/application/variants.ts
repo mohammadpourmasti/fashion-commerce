@@ -291,6 +291,14 @@ export function createVariantService({ pool, now }: CatalogDeps) {
         const [variant] = await tx.db.select({ status: variants.status }).from(variants).where(eq(variants.id, input.variantId)).for("update").limit(1);
         if (!variant) return notFound("variantId");
         if (variant.status !== "active") return invalid([issue("invalid_transition", "status", { from: variant.status, action: "discontinue" })]);
+        if (product.status === "active") {
+          // A published product always keeps a variant to buy; discontinues of one product serialize on its lock.
+          const [others] = await tx.db
+            .select({ n: count() })
+            .from(variants)
+            .where(and(eq(variants.productId, product.id), eq(variants.status, "active"), ne(variants.id, input.variantId)));
+          if ((others?.n ?? 0) === 0) return invalid([issue("no_active_variant", "variantId")]);
+        }
 
         const at = now();
         await tx.db.update(variants).set({ status: "discontinued", discontinuedAt: at, updatedAt: at }).where(eq(variants.id, input.variantId));

@@ -17,7 +17,7 @@ introduces.
 | 1 | Quality gates: Vitest, Playwright, CI workflow, Dockerfile + docker-compose (Postgres) | **Done — local verification complete on Windows** (see "Phase 1 — verification"); still pending: the first real GitHub Actions run; remaining item: two localized-404 e2e tests are `fixme` |
 | 2A | Data foundation: DB pool, transaction helper, migration runner (checksums, safe down), transactional outbox + `handled_events`, real-PostgreSQL tests | **Done — local verification complete on Windows** (see "Phase 2A"); still pending: the first real GitHub Actions run |
 | 2B | Identity: users, scrypt passwords, sessions (`__Host-session`), login throttling, CSRF, kernel authorization contracts | **Done — local verification complete on Windows** (see "Phase 2B"); still pending: the first real GitHub Actions run |
-| 2C | Catalog: products, variants (composite FKs), categories, brands, attributes, localized content, image metadata (no prices) | **In progress — Steps 1–3 committed; Step 4 (product core) awaiting review** (see "Phase 2C") |
+| 2C | Catalog: products, variants (composite FKs), categories, brands, attributes, localized content, image metadata (no prices) | **In progress — Steps 1–5B committed; Step 6 (publication and storefront reads) awaiting review** (see "Phase 2C") |
 | 2D | Inventory: locations, ledger, reservations, DB-function-only writes, delta-matrix tests | Planned |
 | 2E | Integration: composition root wiring, end-to-end flows, hardening | Planned |
 | 6 | Storefront: category/product pages, search, cart | Planned |
@@ -107,8 +107,9 @@ Approved scope: service layer only (ADR-024, ADR-025). No prices, stock, HTTP ro
 | 3 | Taxonomy services: categories, brands, attributes and values | **Done** (commit `936aba7`) |
 | 4 | Products, translations, descriptive attributes | **Done** (commit `142032f`) |
 | 5A | Axes and variants | **Done** (commit `3f85bce`) |
-| 5B | Media assets and product images | **Implemented; awaiting review** |
-| 7 | Public read queries, outbox events, docs, Windows verification script | Planned |
+| 5B | Media assets and product images | **Done** (commit `ae9a163`) |
+| 6 | Publication and the public storefront read model | **Implemented; awaiting review** |
+| 7 | Docs and Windows verification script | Planned |
 
 Step 1:
 
@@ -151,6 +152,13 @@ Step 5B (ADR-030; no migration, no database change):
 - Event: `catalog.product.updated` for a real image change; asset registration emits none.
 - Tests: `catalog-media.int.test.ts` (authorization, asset conflicts and races, set/diff/no-op behaviour, reference protection both ways, deterministic races against axis and value changes, archive and concurrent sets, and a rollback test) plus new domain unit tests.
 - Left to the publishing step: publish-time validation and the last-active-variant guard.
+
+Step 6 (ADR-031; no migration, no database change):
+
+- `catalog.publication`: `publish` and `unpublish` (`catalog:products.publish`, `expectedVersion`), applying the existing publication rules with every blocking issue reported together; events `catalog.product.published` / `unpublished`. `variants.discontinue` now refuses the last active variant of an active product (`no_active_variant`).
+- `catalog.storefront` (no permission, repeatable-read): `categoryTree`, `getCategory`, `listProducts` (published only, newest first, category subtree, paginated) and `getProduct`, returning plain DTOs with Persian fallback and every locale's slug; no internal data is exposed.
+- Tests: `catalog-publication.int.test.ts` (authorization, blocking reasons, repeat and stale versions, the variant guard, and deterministic races against variant discontinue, image clearing, a second publish, and category and brand archives) and `catalog-storefront.int.test.ts` (visibility rules, localization and fallback, slug resolution, cards, product pages, pagination and exposure of internal data). All data is built through the real services.
+- Next (Phase 6A, needs review before starting): storefront shell, navigation and empty states with repository-owned generated SVG editorial artwork under `public/images/editorial` (never catalog media), a development-only preview of unpublished products guarded against production, and the server-side wiring of the catalog.
 
 ## Explicit non-goals (for now)
 
